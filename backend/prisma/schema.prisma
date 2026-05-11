@@ -1,0 +1,419 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUM TYPES
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  ORGANIZER
+  PARTICIPANT
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  FINISHED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  WAITLISTED
+}
+
+enum SubmissionStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+enum NotificationType {
+  REGISTRATION
+  CERTIFICATE
+  SUBMISSION
+  EVENT_UPDATE
+  SYSTEM
+}
+
+// ============================================================
+// USER MODEL
+// ============================================================
+
+model User {
+  id                String    @id @default(uuid())
+  name              String
+  email             String    @unique
+  password          String
+  cpf               String?   @unique
+  matricula         String?
+  phone             String?
+  institution       String?   @default("UFRA Campus Paragominas")
+  course            String?
+  avatar            String?
+  role              UserRole  @default(PARTICIPANT)
+  isActive          Boolean   @default(true)
+  emailVerified     Boolean   @default(false)
+  emailVerifiedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  organizedEvents   Event[]         @relation("EventOrganizer")
+  registrations     Registration[]
+  certificates      Certificate[]
+  submissions       Submission[]
+  reviews           Review[]
+  notifications     Notification[]
+  passwordResets    PasswordResetToken[]
+  attendances       Attendance[]
+
+  @@index([email])
+  @@index([cpf])
+  @@index([role])
+  @@map("users")
+}
+
+// ============================================================
+// CATEGORY MODEL
+// ============================================================
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  color       String?  @default("#1B5E20")
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events      Event[]
+
+  @@map("categories")
+}
+
+// ============================================================
+// EVENT MODEL
+// ============================================================
+
+model Event {
+  id              String      @id @default(uuid())
+  title           String
+  slug            String      @unique
+  description     String
+  shortDescription String?
+  banner          String?
+  startDate       DateTime
+  endDate         DateTime
+  registrationDeadline DateTime?
+  location        String
+  address         String?
+  isOnline        Boolean     @default(false)
+  onlineLink      String?
+  workload        Int         // carga horária em horas
+  maxParticipants Int?
+  status          EventStatus @default(DRAFT)
+  isFeatured      Boolean     @default(false)
+  isPublic        Boolean     @default(true)
+  
+  // Submission settings
+  acceptsSubmissions Boolean  @default(false)
+  submissionDeadline DateTime?
+  submissionGuidelines String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  organizerId     String
+  organizer       User        @relation("EventOrganizer", fields: [organizerId], references: [id])
+  categoryId      String?
+  category        Category?   @relation(fields: [categoryId], references: [id])
+  
+  speakers        Speaker[]
+  schedules       Schedule[]
+  registrations   Registration[]
+  certificates    Certificate[]
+  submissions     Submission[]
+  coOrganizers    EventCoOrganizer[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([startDate])
+  @@index([organizerId])
+  @@map("events")
+}
+
+// ============================================================
+// EVENT CO-ORGANIZER (many-to-many)
+// ============================================================
+
+model EventCoOrganizer {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  role      String?  @default("Co-organizador")
+  createdAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_co_organizers")
+}
+
+// ============================================================
+// SPEAKER MODEL
+// ============================================================
+
+model Speaker {
+  id          String   @id @default(uuid())
+  name        String
+  bio         String?
+  photo       String?
+  title       String?
+  institution String?
+  email       String?
+  linkedin    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  schedules   Schedule[]
+
+  @@index([eventId])
+  @@map("speakers")
+}
+
+// ============================================================
+// SCHEDULE (Programação) MODEL
+// ============================================================
+
+model Schedule {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  location    String?
+  type        String?  @default("Palestra") // Palestra, Minicurso, Mesa Redonda, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  speakerId   String?
+  speaker     Speaker? @relation(fields: [speakerId], references: [id])
+
+  @@index([eventId])
+  @@map("schedules")
+}
+
+// ============================================================
+// REGISTRATION MODEL
+// ============================================================
+
+model Registration {
+  id              String             @id @default(uuid())
+  qrCode          String             @unique
+  qrCodeImage     String?
+  status          RegistrationStatus @default(CONFIRMED)
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  
+  // Extra participant info (snapshot at registration time)
+  participantName String?
+  participantEmail String?
+  participantCpf  String?
+  participantPhone String?
+  participantCourse String?
+  participantInstitution String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id])
+  attendance      Attendance?
+  certificate     Certificate?
+
+  @@unique([userId, eventId])
+  @@index([qrCode])
+  @@index([userId])
+  @@index([eventId])
+  @@map("registrations")
+}
+
+// ============================================================
+// ATTENDANCE (Presença) MODEL
+// ============================================================
+
+model Attendance {
+  id              String   @id @default(uuid())
+  checkedInAt     DateTime @default(now())
+  checkedOutAt    DateTime?
+  method          String   @default("QR_CODE") // QR_CODE, MANUAL
+  deviceInfo      String?
+  
+  registrationId  String   @unique
+  registration    Registration @relation(fields: [registrationId], references: [id])
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  checkedInBy     String?  // ID do organizador que fez o check-in manual
+
+  @@index([registrationId])
+  @@index([userId])
+  @@map("attendances")
+}
+
+// ============================================================
+// CERTIFICATE MODEL
+// ============================================================
+
+model Certificate {
+  id              String   @id @default(uuid())
+  code            String   @unique  // Código único de autenticação (ex: UFRA-2024-XXXX)
+  pdfPath         String?           // Caminho local do PDF
+  qrCodeImage     String?           // QR Code de validação
+  issuedAt        DateTime @default(now())
+  downloadCount   Int      @default(0)
+  isValid         Boolean  @default(true)
+
+  // Snapshot do certificado
+  participantName String
+  eventTitle      String
+  workload        Int
+  eventStartDate  DateTime
+  eventEndDate    DateTime
+
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  eventId         String
+  event           Event        @relation(fields: [eventId], references: [id])
+  registrationId  String       @unique
+  registration    Registration @relation(fields: [registrationId], references: [id])
+
+  @@index([code])
+  @@index([userId])
+  @@index([eventId])
+  @@map("certificates")
+}
+
+// ============================================================
+// SUBMISSION (Artigos) MODEL
+// ============================================================
+
+model Submission {
+  id              String           @id @default(uuid())
+  title           String
+  abstract        String           // Resumo
+  keywords        String[]
+  authors         String[]
+  area            String?          // Área de conhecimento
+  filePath        String           // Caminho do PDF submetido
+  fileName        String
+  fileSize        Int
+  status          SubmissionStatus @default(PENDING)
+  
+  reviewerNotes   String?          // Notas do avaliador para o autor
+  adminNotes      String?          // Notas internas
+  
+  submittedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  reviewedAt      DateTime?
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id])
+  reviews         Review[]
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@map("submissions")
+}
+
+// ============================================================
+// REVIEW (Avaliação de Artigos) MODEL
+// ============================================================
+
+model Review {
+  id            String   @id @default(uuid())
+  score         Int?     // Nota de 0 a 10
+  originality   Int?     // Originalidade
+  relevance     Int?     // Relevância
+  clarity       Int?     // Clareza
+  methodology   Int?     // Metodologia
+  conclusion    String   // Parecer final
+  recommendation String  // APPROVE / REJECT / REVISION
+  isAnonymous   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  submissionId  String
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId    String
+  reviewer      User       @relation(fields: [reviewerId], references: [id])
+
+  @@unique([submissionId, reviewerId])
+  @@index([submissionId])
+  @@map("reviews")
+}
+
+// ============================================================
+// NOTIFICATION MODEL
+// ============================================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  link      String?
+  createdAt DateTime         @default(now())
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================================
+// PASSWORD RESET TOKEN MODEL
+// ============================================================
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}
