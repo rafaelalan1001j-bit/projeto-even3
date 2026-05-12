@@ -40,11 +40,25 @@ app.use(helmet({
 }));
 
 // CORS
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+].filter(Boolean);
+
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3000',
-  ],
+  origin: (origin, callback) => {
+    // Permite requisições sem origin (ex: mobile apps, curl)
+    if (!origin) return callback(null, true);
+    // Permite qualquer subdomínio vercel.app em produção
+    if (
+      allowedOrigins.includes(origin) ||
+      /\.vercel\.app$/.test(origin) ||
+      /\.railway\.app$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origem não permitida pelo CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
