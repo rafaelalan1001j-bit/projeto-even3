@@ -1,0 +1,14 @@
+{
+  "name": "ufra-eventos-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root package.json para forçar o build do backend no Railway",
+  "scripts": {
+    "install": "cd backend && npm install && npx prisma generate",
+    "build": "echo 'Build automático pelo postinstall'",
+    "start": "cd backend && npx prisma migrate deploy && node src/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
