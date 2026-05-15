@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["nodejs_20"]
-
-[build]
-dir = "backend"
-
-[start]
-cmd = "npx prisma migrate deploy && node src/server.js"
