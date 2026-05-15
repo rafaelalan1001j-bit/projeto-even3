@@ -131,8 +131,8 @@ app.use(errorHandler);
 // ============================================================
 // INICIALIZAR SERVIDOR
 // ============================================================
-app.listen(PORT, () => {
-  logger.info(`🚀 UFRA Eventos API rodando em http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`🚀 UFRA Eventos API rodando em http://0.0.0.0:${PORT}`);
   logger.info(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`📁 Uploads em: ${path.join(__dirname, '..', 'uploads')}`);
 });
