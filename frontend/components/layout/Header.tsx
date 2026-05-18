@@ -120,7 +120,12 @@ export function Header() {
                       </Avatar>
                       <div className="text-left hidden lg:block">
                         <p className="text-sm font-semibold leading-none">{user.name.split(' ')[0]}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{user.role.toLowerCase()}</p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {user.role === 'ADMIN' ? 'Administrador' : 
+                           user.role === 'ORGANIZER' ? 'Organizador' : 
+                           user.role === 'PARTICIPANT' ? 'Participante' : 
+                           user.role.toLowerCase()}
+                        </p>
                       </div>
                       <ChevronDown className="h-3 w-3 text-muted-foreground" />
                     </Button>
